@@ -1,12 +1,17 @@
 import cv2
 import numpy as np
 
-def DetectLineSlope(src):
+def DetectRoadLine(src):
     # 흑백화
     gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
 
     # 모서리 검출
     can = cv2.Canny(gray, 50, 200, None, 3)
+    ######### Canny Edge 결과  출력#########
+    #cv2.imshow('Lines', can)
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
+    #######################################
 
     # 관심 구역 설정
     height = can.shape[0]
@@ -15,9 +20,30 @@ def DetectLineSlope(src):
     cv2.fillPoly(mask, rectangle, 255)
     masked_image = cv2.bitwise_and(can, mask)
     ccan = cv2.cvtColor(masked_image, cv2.COLOR_GRAY2BGR)
+    ############### 검출되는 구역(차선) 출력###############
+    # 직선 좌표 정의
+    #line1 = np.array([(0, height), (120, 300)], dtype=np.int32)
+    #line2 = np.array([(120, 300), (520, 300)], dtype=np.int32)
+    #line3 = np.array([(520, 300), (640, height)], dtype=np.int32)
+    # 직선을 이미지에 그리기 (파란색)
+    #cv2.polylines(masked_image, [line1, line2, line3], isClosed=False, color=(255, 0, 0), thickness=2)
+    # 이미지 표시
+    #cv2.imshow('Lines', masked_image)
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
+    ####################################################
 
     # 직선 검출
     line_arr = cv2.HoughLinesP(masked_image, 1, np.pi / 180, 20, minLineLength=10, maxLineGap=10)
+    ######### 검출된 직선 출력 #########
+    #for line in line_arr:
+    #    x1, y1, x2, y2 = line[0]
+    #    cv2.line(masked_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+    #cv2.imshow('Lines', masked_image)
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
+    ###################################
 
     # 중앙을 기준으로 오른쪽, 왼쪽 직선 분리
     line_R = np.empty((0, 5), int)
@@ -53,43 +79,41 @@ def DetectLineSlope(src):
     except:
         degree_R = 0
 
-    # 원본에 합성
+    # 원본에 최종 차선 합성
     mimg = cv2.addWeighted(src, 1, ccan, 1, 0)
     return mimg, degree_L, degree_R
 
-# 영상 로드
-cap = cv2.VideoCapture('car.avi') 
 
+cap = cv2.VideoCapture('car.avi')   # 영상 로드
+state = ''                          # 차의 움직임 상태 (현재 차선 기준)
 while cap.isOpened():
-    ret, frame = cap.read()
+    ret, frame = cap.read()         # T/F, frame/Nan
 
-    if not ret:
-        print("프레임이 존재하지 않습니다")
+    if not ret:     # F -> 종료
         break
 
-    cv2.imshow('ImageWindow', DetectLineSlope(frame)[0])
-    l, r = DetectLineSlope(frame)[1], DetectLineSlope(frame)[2]
-
+    cv2.imshow('ImageWindow', DetectRoadLine(frame)[0])
+    l, r = DetectRoadLine(frame)[1], DetectRoadLine(frame)[2]
+    ########################################
     if abs(l) <= 155 or abs(r) <= 155:
         if l == 0 or r == 0:
-            if l < 0 or r < 0:
-                print('left')
-            elif l > 0 or r > 0:
-                print('right')
+            state = 'Left' if (l < 0 or r < 0) else ('Right' if(l > 0 or r > 0) else '')
         elif abs(l - 15) > abs(r):
-            print('right')
+            state = 'Right'
         elif abs(r + 15) > abs(l):
-            print('left')
-        else:
-            print('go')
+            state = 'Left'
+        #else:
+            #state = 'Go'
     else:
         if l > 155 or r > 155:
-            print('hard right')
+            state = 'hard right'
         elif l < -155 or r < -155:
-            print('hard left')
+            state = 'hard left'
+    print(state)
 
     if cv2.waitKey(1) & 0xff == ord('q'):
         break
+    ########################################
 
-cap.release()
-cv2.destroyAllWindows()
+cap.release()            # 카메라 객체 해제(메모리 해제)
+cv2.destroyAllWindows()  # 지금까지 열렸던 모든 창 종료
